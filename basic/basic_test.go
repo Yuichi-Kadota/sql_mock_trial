@@ -5,23 +5,20 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Yuichi-Kadota/sql_mock_trial/infra"
 )
 
 // a successful case
 func TestShouldUpdateStats(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
+	db, mock := infra.NewMockDB()
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE products").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE products SET view = views +1").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("INSERT INTO product_viewers").WithArgs(2, 3).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
 	// now we execute our method
-	if err = recordStats(db, 2, 3); err != nil {
+	if err := recordStats(db, 2, 3); err != nil {
 		t.Errorf("error was not expected while updating stats: %s", err)
 	}
 
@@ -33,21 +30,17 @@ func TestShouldUpdateStats(t *testing.T) {
 
 // a failing test case
 func TestShouldRollbackStatUpdatesOnFailure(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
+	db, mock := infra.NewMockDB()
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE products").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE products SET view = views +1")
 	mock.ExpectExec("INSERT INTO product_viewers").
 		WithArgs(2, 3).
 		WillReturnError(fmt.Errorf("some error"))
 	mock.ExpectRollback()
 
 	// now we execute our method
-	if err = recordStats(db, 2, 3); err == nil {
+	if err := recordStats(db, 2, 3); err == nil {
 		t.Errorf("was expecting an error, but there was none")
 	}
 

@@ -1,9 +1,21 @@
 package main
 
-import "database/sql"
+import (
+	"github.com/Yuichi-Kadota/sql_mock_trial/infra"
+	"gorm.io/gorm"
+)
 
-func recordStats(db *sql.DB, userID, productID int64) (err error) {
-	tx, err := db.Begin()
+type Product struct {
+	View uint `gorm:"column:view"`
+}
+
+type ProductViewers struct {
+	UserID    string `gorm:"user_id"`
+	ProductID string `gorm:"product_id"`
+}
+
+func recordStats(db *gorm.DB, userID, productID int64) (err error) {
+	tx := db.Begin()
 	if err != nil {
 		return
 	}
@@ -11,30 +23,30 @@ func recordStats(db *sql.DB, userID, productID int64) (err error) {
 	defer func() {
 		switch err {
 		case nil:
-			err = tx.Commit()
+			tx.Commit()
 		default:
 			tx.Rollback()
 		}
 	}()
 
-	if _, err = tx.Exec("UPDATE products SET views = views + 1"); err != nil {
-		return
+	updSql := `UPDATE products SET view = views +1`
+	updResult := db.Raw(updSql)
+	if updResult.Error != nil {
+		return updResult.Error
 	}
-	if _, err = tx.Exec("INSERT INTO product_viewers (user_id, product_id) VALUES (?, ?)", userID, productID); err != nil {
-		return
+
+	insertSql := `INSERT INTO product_viewers (user_id,product_id) VALUES(?,?)`
+	insertResult := db.Raw(insertSql)
+	if insertResult.Error != nil {
+		return insertResult.Error
 	}
+
 	return
 }
 
 func main() {
-	// @NOTE: the real connection is not required for tests
-	db, err := sql.Open("mysql", "root@/blog")
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	if err = recordStats(db, 1 /*some user id*/, 5 /*some product id*/); err != nil {
+	db := infra.NewDB()
+	if err := recordStats(db, 1 /*some user id*/, 5 /*some product id*/); err != nil {
 		panic(err)
 	}
 }
